@@ -1,11 +1,11 @@
 import mysql.connector
-from geopy.distance import geodesic, distance
+from geopy.distance import geodesic
 
 import mysql.connector
 
 connection = mysql.connector.connect(
     host="localhost",
-    database="airports",
+    database = "flight_game",
     user="nirajan",
     password="pass_word"
 )
@@ -16,9 +16,22 @@ print(connection, "connection established")
 # for airport location in game
 
 def airport_type():
-    db = """SELECT iso_country, ident, name, type, latitude_deg, longitude_deg 
-    FROM airports
-    WHERE type='large_airport'   
+    db = """SELECT 
+    airport.ident, 
+    airport.name, 
+    airport.type, 
+    airport.iso_country, 
+    country.continent, 
+    airport.latitude_deg, 
+    airport.longitude_deg, 
+    country.name AS country_name
+    FROM 
+    airport JOIN 
+    country ON airport.iso_country = country.iso_country
+    WHERE 
+    airport.type = 'large_airport'
+    ;
+
     """
     db_cursor = connection.cursor(dictionary=True)
     db_cursor.execute(db)
@@ -28,9 +41,21 @@ def airport_type():
 
 # get airport information
 def get_airport_info(ident):
-    db = """select ident, name, continent, iso_country, latitude_deg, longitude_deg 
-    from airports 
-    where ident=%s"""
+    #db = """select ident, name, continent, iso_country, latitude_deg, longitude_deg
+    #from airports
+    #where ident=%s"""
+    db = """SELECT 
+    airport.ident, 
+    airport.name AS airport_name, 
+    airport.iso_country, 
+    country.name AS country_name,
+    airport.continent,
+    airport.latitude_deg,
+    airport.longitude_deg  
+    FROM airport 
+    JOIN country ON airport.iso_country = country.iso_country
+    WHERE airport.ident = %s"""
+
 
     db_cursor = connection.cursor(dictionary=True)
     db_cursor.execute(db, (ident,))
@@ -43,7 +68,7 @@ def calculate_distance(current, next):
     start = get_airport_info(current)
     end = get_airport_info(next)
     return geodesic((start['latitude_deg'], start['longitude_deg']),
-                    (end['latitude_deg'], end['longitude_deg'])).km
+                             (end['latitude_deg'], end['longitude_deg'])).km
 
 
 # to get airport in range
@@ -52,30 +77,17 @@ def airport_in_range(icao, airports_range, distance_range):
     travel_range = []
     for airport in airports_range:
         distance = calculate_distance(icao, airport['ident'])
-        if distance <= distance_range and distance != 0:
+        if distance <= distance_range  and distance != 0:
             travel_range.append(airport)
     return travel_range
 
 
-def update_location(co2_consumed, money_spent, distance_range):
-    db_game1 = "INSERT INTO flight_game.game1(co2_consumed,money_spent,distance_range) VALUES (%s,%s,%s)"
-    db_cursor = connection.cursor(dictionary=True)
-    db_cursor.execute(db_game1, (co2_cost1, money_spent, distance_range))
 
-
-"""
-def co2_range():
-    co2_cost= []
-    for airport in co2_range:
-        distance_range = calculate_distance(icao, airport['ident'])
-        if distance_range <= cost_range  and not distance_range == 0:
-            travel_range.append(distance_range * 0.4)
-"""
 
 
 # to create new game
 
-def create_game(co2_consumed, money_spent):
+def create_game(co2_consumed, money_spent ):
     db_game = "INSERT INTO flight_game.game1(co2_consumed,money_spent) VALUES (%s,%s)"
     db_cursor = connection.cursor(dictionary=True)
     db_cursor.execute(db_game, (co2_consumed, money_spent))
@@ -100,32 +112,31 @@ start_airport = all_airports[0]['ident']
 
 current_airport = start_airport
 
-create_game(0, 0)
+create_game(0,0)
 
 while True:
     airport = get_airport_info(current_airport)
-    print(f"Your are at {airport['name']}.")
+    print(f"Your are at {airport['airport_name']}.")
     print(f"you have \nMONEY :€{money:.0f} \nRANGE :{distance_range:.0f}km \nALLOCATED Co2 :{allocated_co2:.0f} ")
 
     input('\033[32mPress Enter to continue...\033[0m')
 
     if money > 0:
 
-        question_fuel = input("Do you want to by Fuel ? if yes type y if no type n. : ").upper()
-        if question_fuel == "Y":
+        question_fuel = input("Do you want to buy Fuel ? if yes type y if no type n. : ").upper()
+        if question_fuel == "y":
 
-            question_cost = input(f"please enter amount you want to buy.(you have €{money} and €1=2km). :")
+            question_cost = input("please enter amount you want to buy.(€1=2km). :")
             question_cost = int(question_cost)
-
             if question_cost > money:
                 print("Not enough money.")
             else:
                 money -= question_cost
                 distance_range += question_cost * 2
                 print(
-                    f"Updated values: \nMONEY :€{money:.0f} \nRANGE :{distance_range:.0f}km \nALLOCATED Co2 :{allocated_co2:.0f} ")
-        else:
-            input('\033[32mPress Enter to continue...\033[0m')
+                    f"you have \nMONEY :€{money:.0f} \nRANGE :{distance_range:.0f}km \nALLOCATED Co2 :{allocated_co2:.0f} ")
+
+    input('\033[32mPress Enter to continue...\033[0m')
 
     airport1 = airport_in_range(current_airport, all_airports, distance_range)
     print(f'''\033[34mThere are {len(airport1)} airports in range: \033[0m''')
@@ -137,10 +148,8 @@ while True:
         for airport in airport1:
             ap_distance = calculate_distance(current_airport, airport['ident'])
             co2_cost = ap_distance * 0.4
-            print(
-                f'''{airport['name']}, icao: {airport['ident']}, county:{airport['iso_country']}, continent:{airport.get('continent','Unknown')}, distance: {ap_distance:.0f}km, Co2 cost: {co2_cost:.0f}\n''')
+            print(f"{airport['name']}, icao: {airport['ident']}, country: {airport['country_name']}, continent: {airport['continent']}, distance: {ap_distance:.0f}km  Co2 cost: {co2_cost:.0f}")
 
-        # ask for destination
     destination = input("Enter destination icao code: ")
     selected_destination = calculate_distance(current_airport, destination)
     co2_cost1 = selected_destination * 0.4
@@ -153,4 +162,3 @@ while True:
         break
     else:
         continue
-
